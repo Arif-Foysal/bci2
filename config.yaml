@@ -1,0 +1,117 @@
+# ieeg-ib pipeline configuration.
+# Edit before running. The pipeline.py CLI reads this on every command.
+
+project:
+  slug: "ieeg-ib"          # kebab-case; used as kernel/dataset prefix
+
+kaggle:
+  username: "mdariffaysalnayem"
+
+  # Datasets referenced by notebooks. The 'core' entry is created/updated by
+  # `pipeline.py upload-src`. Phase-result entries are created by
+  # `pipeline.py upload-results <phase>`. Add public dataset slugs as needed.
+  datasets:
+    core: "mdariffaysalnayem/ieeg-ib-core"
+    raw_data: "mdariffaysalnayem/ds004100"   # HUP iEEG dataset (NEMAR ds004100)
+    # Intermediate results, populated as phases complete:
+    phase1c_results: "mdariffaysalnayem/ieeg-ib-phase1c-results"
+    # phase2_results: "mdariffaysalnayem/ieeg-ib-phase2-results"
+    # phase3_results: "mdariffaysalnayem/ieeg-ib-phase3-results"
+    # phase4_results: "mdariffaysalnayem/ieeg-ib-phase4-results"
+
+  # Optional extra files bundled into the core dataset alongside src/*.py.
+  core_extras: []
+
+# Pipeline control
+pipeline:
+  phases:
+    phase1:
+      description: "Temporal MI collapse detection (rolling Phi(t) signal)"
+      notebooks:
+        - id: "phase1a"
+          title: "Smoke test and environment validation"
+          gpu: false
+          timeout_hours: 2
+          datasets: []                # core always included; raw_data for real runs
+          success_criteria:
+            - "experiment_complete == true"
+
+        - id: "phase1b"
+          title: "Rolling MI collapse on pilot patients (5 patients)"
+          gpu: false
+          timeout_hours: 6
+          datasets: ["raw_data"]
+          success_criteria:
+            - "n_seizures_processed > 0"
+            - "mean_tau_lead_seconds > 0"
+
+    phase2:
+      description: "Graph-theoretic network fragmentation"
+      notebooks:
+        - id: "phase2a"
+          title: "MI-weighted dynamic graphs: density, degree, clustering"
+          gpu: false
+          timeout_hours: 8
+          datasets: ["raw_data", "phase1c_results"]
+          success_criteria:
+            - "network_fragmentation_detected == true"
+
+    phase3:
+      description: "MI vs. signal variance comparison"
+      notebooks:
+        - id: "phase3a"
+          title: "MI advance over variance (delta_tau)"
+          gpu: false
+          timeout_hours: 6
+          datasets: ["raw_data", "phase1c_results"]
+          success_criteria:
+            - "pct_seizures_mi_leads_variance > 0.5"
+
+    phase4:
+      description: "Transfer entropy SOZ identification"
+      notebooks:
+        - id: "phase4a"
+          title: "TE asymmetry index and SOZ information black hole"
+          gpu: false
+          timeout_hours: 9
+          datasets: ["raw_data", "phase1c_results"]
+          success_criteria:
+            - "soz_auc > 0.5"
+
+    phase1c:
+      description: "Full 57-patient MI collapse analysis with Wilcoxon signed-rank test"
+      notebooks:
+        - id: "phase1c"
+          title: "Full MI collapse analysis — 57 patients, Wilcoxon test"
+          gpu: false
+          timeout_hours: 9
+          datasets: ["raw_data"]
+          success_criteria:
+            - "wilcoxon_p < 0.05"
+            - "n_patients_processed > 50"
+
+    soz_diag:
+      description: "Find SOZ label location in HUP BIDS structure"
+      notebooks:
+        - id: "soz_diag"
+          title: "SOZ label diagnostic"
+          gpu: false
+          timeout_hours: 1
+          datasets: ["raw_data"]
+          success_criteria:
+            - "soz_diag_complete == true"
+
+    phase1_diag:
+      description: "Dataset structure diagnostic (one-shot, delete after use)"
+      notebooks:
+        - id: "phase1-diag"
+          title: "Dataset structure diagnostic"
+          gpu: false
+          timeout_hours: 1
+          datasets: ["raw_data"]
+          success_criteria:
+            - "diagnostic_complete == true"
+
+  max_retries_per_notebook: 5
+  poll_interval_seconds: 120
+  auto_advance: false
